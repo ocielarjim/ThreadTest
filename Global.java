@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package LoadImage;
+package loadphoto;
 
 /**
  *
@@ -27,6 +27,8 @@ public class Global {
     
     // <editor-fold desc="PROPERTIES PROCESS">
     public final int TOP_FILE_LOAD = 10;
+    public final String REG_EXP_FILE_NAME = "\\d{9}[(\\..)]\\w{3}";
+    public final String WILDCARD_RENAME_ERROR = "ddMMyyyyhhmmss";
     // </editor-fold>
     
     // <editor-fold desc="ERROR IN LOAD FILE">
@@ -34,7 +36,8 @@ public class Global {
     public final String ERROR_REPROCESS_FILE = "file_exist";
     public final String EXCEPTION_NAME_FORMAT_INCORRECT = "Name format incorrect";
     public final String ERROR_NAME_FORMAT_INCORRECT = "bad_name";
-    public final String GENERIC_FILE_ERROR = "error";
-    public final String FILE_REPROCESS = "reprocess";
+    public final String ERROR_GENERIC_FILE = "error";
+    public final String ERROR_FILE_REPROCESS = "reprocess";
+    public final String EXCEPTION_INCOPATIBLE_FILE = "Archivo dañado o incompatible";
     // </editor-fold>
 }
