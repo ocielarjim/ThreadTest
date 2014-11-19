@@ -3,12 +3,14 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package LoadImage;
+package loadphoto;
 
 import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -17,9 +19,9 @@ import javax.imageio.ImageIO;
 
 /**
  *
- * @author Ociel Jiménez
+ * @author Administrator
  */
-public class ProcessLoad extends Thread {
+public class TestThread extends Thread {
     
     Global global = new Global();
     
@@ -52,7 +54,8 @@ public class ProcessLoad extends Thread {
                 // </editor-fold>
                 
                 // <editor-fold desc="2.2  VALIDATE IF NAME FILE IS CORRECT">
-                if (!nameFile.matches("(\\d{9})\\l{3}"))
+                // Validate name file with this estructure "\\d{9}[(\\..)]\\l{3}" f.e.: 200512029.jpg
+                if (!nameFile.matches(global.REG_EXP_FILE_NAME))
                     throw new Exception(global.EXCEPTION_NAME_FORMAT_INCORRECT);
                 // </editor-fold>
                 
@@ -60,16 +63,18 @@ public class ProcessLoad extends Thread {
                 this.normalizeImage(global.DIRECTORY_PROCESS + nameFile, global.DIRECTORY_NORMALIZE_PHOTO, nameFile);
                 // </editor-fold>
                 
-                // <editor-fold desc="2.4  ADD TO LIST PROCESSED SUCCESSFULL">
+                // <editor-fold desc="2.5  ADD TO LIST PROCESSED SUCCESSFULL">
                 listFileProcessSuccessfull.add(nameFile);
                 // </editor-fold>
             }
             catch (Exception e) {
-                // <editor-fold desc="2.5  ADD TO LIST PROCESSED ERROR">
+                // <editor-fold desc="2.6  ADD TO LIST PROCESSED ERROR">
                 if (e.getMessage().compareTo(global.EXCEPTION_REPROCESS_FILE) == 0)
                     listFileReprocess.add(nameFile);
                 else if (e.getMessage().compareTo(global.EXCEPTION_NAME_FORMAT_INCORRECT) == 0)
                     listFileBadName.add(nameFile);
+                else if (e.getMessage().compareTo(global.EXCEPTION_INCOPATIBLE_FILE) == 0)
+                    listFileProcessError.add(nameFile);
                 else
                     listFileProcessError.add(nameFile);
                 // </editor-fold>
@@ -81,7 +86,8 @@ public class ProcessLoad extends Thread {
         System.out.println("Mueve los archivos procesados correctamente a la carpeta Processed");
         this.moveFileProcessed(listFileProcessSuccessfull);
         System.out.println("Mueve los archivos procesados con errores a la carpeta Errors");
-        this.moveFileError(listFileProcessError, global.GENERIC_FILE_ERROR);
+        this.moveFileError(listFileProcessError, global.ERROR_GENERIC_FILE);
+        this.moveFileError(listFileBadName, global.ERROR_NAME_FORMAT_INCORRECT);
         if (listFileReprocess != null)
             this.moveFileError(listFileReprocess, global.ERROR_REPROCESS_FILE);
         // </editor-fold>
@@ -116,17 +122,15 @@ public class ProcessLoad extends Thread {
     public String[] getListFile(String pPath, int pRange) {
         File directory = new File(pPath);
         String[] listFile;
-        int loadPartFiles = directory.list().length;
+        int countFile = 0;
+        
+        int loadPartFiles = directory.list(new FileFilter()).length;
         
         if (loadPartFiles >= pRange)
             loadPartFiles = pRange;
         
         listFile = new String[loadPartFiles];
-        /*for (int i = 0; i < loadPartFiles; i++)
-            listFile[i] = directory.list()[i];*/
-        System.arraycopy(directory.list(), 0, listFile, 0, loadPartFiles);
-        
-        
+        System.arraycopy(directory.list(new FileFilter()), 0, listFile, 0, loadPartFiles);
         return listFile;
     }
     
@@ -163,9 +167,12 @@ public class ProcessLoad extends Thread {
      * @param pNameFile
      * @throws java.io.IOException 
      */
-    public void normalizeImage(String pOriginalImagePath, String pNewPath, String pNameFile) throws IOException {
+    public void normalizeImage(String pOriginalImagePath, String pNewPath, String pNameFile) throws IOException, Exception {
         try {
             BufferedImage bImage = loadImage(pOriginalImagePath);
+            // Validate file image, if corrupt file return null.
+            if (bImage == null)
+                throw new Exception(global.EXCEPTION_INCOPATIBLE_FILE);
             if(bImage.getHeight()>bImage.getWidth()){
                 int heigt = (bImage.getHeight() * global.PHOTO_WIDTH) / bImage.getWidth();
                 bImage = resize(bImage, global.PHOTO_WIDTH, heigt);
@@ -191,7 +198,7 @@ public class ProcessLoad extends Thread {
      */
     private void saveImage(BufferedImage pImage, String pPath, String pNameFile) {
         try {
-            File file = new File(pPath + pNameFile);
+            File file = new File(pPath + pNameFile.split("\\..")[0] + "." + global.FORMAT_FILE_OUTPUT);
             if (global.REPROCESS_PHOTO_ALLOWED && file.isFile())
                 file = new File(pPath + this.renameErrorFile(pNameFile, "reprocess"));
             file.getParentFile().mkdirs();
@@ -214,6 +221,8 @@ public class ProcessLoad extends Thread {
         BufferedImage bufim = new BufferedImage(pNewWidth, pNewHeight, pImage.getType());
         Graphics2D graphic = bufim.createGraphics();
         graphic.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        graphic.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        graphic.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         graphic.drawImage(pImage, 0, 0, pNewWidth, pNewHeight, 0, 0, imageWidth, imageHeight, null);
         graphic.dispose();
         return bufim;
@@ -228,7 +237,7 @@ public class ProcessLoad extends Thread {
             File fileOrigin = new File(global.DIRECTORY_PROCESS + nameFile);
             File fileTo = new File(global.DIRECTORY_PROCESSED + nameFile);
             if (global.REPROCESS_PHOTO_ALLOWED && fileTo.isFile())
-                fileTo = new File(global.DIRECTORY_PROCESSED + renameErrorFile(nameFile, global.FILE_REPROCESS));
+                fileTo = new File(global.DIRECTORY_PROCESSED + renameErrorFile(nameFile, global.ERROR_REPROCESS_FILE));
             fileOrigin.renameTo(fileTo);
             fileOrigin.delete();
         }
@@ -244,12 +253,11 @@ public class ProcessLoad extends Thread {
     private String renameErrorFile (String pNameFile, String pValueError) {
         Date dateTime = new Date();
         String nameFile = pNameFile.split("[.]")[0];
-        String formatFile = pNameFile.split("[.]")[1];
-        SimpleDateFormat formatDate = new SimpleDateFormat("dd-MM-yyyy");
+        SimpleDateFormat formatDate = new SimpleDateFormat(global.WILDCARD_RENAME_ERROR);
         
         if (pValueError.compareTo(global.ERROR_NAME_FORMAT_INCORRECT) == 0)
-            return pValueError + "_" + formatDate.format(dateTime) + "_" + nameFile + "." + formatFile;
-        return nameFile + "_" + pValueError + "_" + formatDate.format(dateTime) + "." + formatFile;
+            return pValueError + "_" + formatDate.format(dateTime) + "_" + nameFile + "." + global.FORMAT_FILE_OUTPUT;
+        return nameFile + "_" + pValueError + "_" + formatDate.format(dateTime) + "." + global.FORMAT_FILE_OUTPUT;
     }
     
     /**
